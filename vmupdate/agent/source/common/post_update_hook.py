@@ -22,7 +22,6 @@
 
 import os
 import subprocess
-import sys
 from logging import Logger
 
 from .exit_codes import EXIT
@@ -44,26 +43,25 @@ def run_post_update_hook(
 
     :param hook_path: path of the hook script
     :param log: agent logger
-    :param print_streams: dump captured output to std streams
+    :param print_streams: forward hook output to std streams
     :return: hook result, `EXIT.ERR_VM_POST_UPDATE` if the hook failed
     """
     if not os.access(hook_path, os.X_OK):
         log.debug("Post-update hook %s not found, skipping.", hook_path)
         return ProcessResult()
     log.info("Running post-update hook %s", hook_path)
+    result = ProcessResult(realtime=print_streams)
     with subprocess.Popen(
         [hook_path],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     ) as proc:
-        result = ProcessResult.process_communicate(proc)
+        result += ProcessResult.process_communicate(proc)
     if result.code != EXIT.OK:
         log.warning("Post-update hook failed with exit code: %d", result.code)
         result.code = EXIT.ERR_VM_POST_UPDATE
     _log_output(log, result)
-    if print_streams:
-        _print_streams(result)
     return result
 
 
@@ -73,10 +71,3 @@ def _log_output(log: Logger, result: ProcessResult) -> None:
         log_line("post-update hook out: %s", line)
     for line in result.err.splitlines():
         log_line("post-update hook err: %s", line)
-
-
-def _print_streams(result: ProcessResult) -> None:
-    if result.out:
-        print(result.out, flush=True)
-    if result.err:
-        print(result.err, file=sys.stderr, flush=True)
